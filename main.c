@@ -10,6 +10,7 @@
 #if defined(HAVE_WAITPID) || defined(HAVE_WAIT3)
 #include <sys/wait.h>
 #endif
+#include <sys/wait.h>
 #include <time.h>
 #include "terms.h"
 #include "myctype.h"
@@ -293,7 +294,7 @@ wrap_GC_warn_proc(char *msg, GC_word arg)
 	msg_ring[j].msg = msg;
 	msg_ring[j].arg = arg;
 
-	if (n < sizeof(msg_ring) / sizeof(msg_ring[0]))
+	if (n < (int)(sizeof(msg_ring) / sizeof(msg_ring[0])))
 	    ++n;
 	else
 	    ++i;
@@ -321,23 +322,27 @@ wrap_GC_warn_proc(char *msg, GC_word arg)
 static void
 sig_chld(int signo)
 {
-    int p_stat;
+    if(signo == 0){
+        // SigError
+        return;
+    }
+    int p_status;
     pid_t pid;
 
 #ifdef HAVE_WAITPID
-    while ((pid = waitpid(-1, &p_stat, WNOHANG)) > 0)
+    while ((pid = waitpid(-1, &p_status, WNOHANG)) > 0)
 #elif HAVE_WAIT3
-    while ((pid = wait3(&p_stat, WNOHANG, NULL)) > 0)
+    while ((pid = wait3(&p_status, WNOHANG, NULL)) > 0)
 #else
-    if ((pid = wait(&p_stat)) > 0)
+    if ((pid = wait(&p_status)) > -1)
 #endif
     {
 	DownloadList *d;
 
-	if (WIFEXITED(p_stat)) {
+	if (WIFEXITED(p_status)) {
 	    for (d = FirstDL; d != NULL; d = d->next) {
 		if (d->pid == pid) {
-		    d->err = WEXITSTATUS(p_stat);
+		    d->err = WEXITSTATUS(p_status);
 		    break;
 		}
 	    }
